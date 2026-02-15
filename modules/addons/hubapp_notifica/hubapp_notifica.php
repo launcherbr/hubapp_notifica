@@ -1,8 +1,8 @@
 <?php
 /**
- * HubApp Notifica WHMCS - Unificado (v1.5.9)
+ * HubApp Notifica WHMCS (v1.6.0)
  * Suporta: Whaticket, Evolution API e Z-Pro
- * @author     HubApp / Licencas.Digital
+ * @author     LD | HubApp / Launcher
  */
 
 if (!defined("WHMCS")) die("Access Denied");
@@ -20,7 +20,7 @@ function hubapp_notifica_config() {
         "name" => "HubApp Notifica WHMCS",
         "description" => "Módulo unificado para notificações via Whaticket, Evolution API e Z-Pro.",
         "author" => "HubApp",
-        "version" => "1.5.9",
+        "version" => "1.6.0",
         "fields" => [
             "gateway_type" => [
                 "FriendlyName" => "Gateway de Envio",
@@ -35,6 +35,12 @@ function hubapp_notifica_config() {
             "api_token" => ["FriendlyName" => "Token / ApiKey", "Type" => "password", "Size" => "70"],
             "whatsapp_field_id" => ["FriendlyName" => "Campo WhatsApp", "Type" => "dropdown", "Options" => $customFields],
             "admin_whatsapp" => ["FriendlyName" => "WhatsApp Admin", "Type" => "text", "Size" => "20", "Description" => "Número com DDI (Ex: 5534999999999)"],
+            // Configuração Restaurada
+            "close_ticket" => [
+                "FriendlyName" => "Fechar Ticket (Z-Pro)",
+                "Type" => "yesno",
+                "Description" => "Se marcado, encerra o ticket automaticamente após o envio da notificação."
+            ],
         ]
     ];
 }
@@ -57,7 +63,6 @@ function hubapp_notifica_output($vars) {
         'AdminLogin' => ['name' => 'Alerta de Login Admin', 'default' => '⚠️ Segurança: O usuário {username} acessou o painel administrativo do WHMCS neste momento.'],
     ];
 
-    // Lógica: Salvar Templates
     if (isset($_POST['save_templates'])) {
         foreach ($templates as $key => $data) {
             Capsule::table('tbladdonmodules')->updateOrInsert(
@@ -65,70 +70,49 @@ function hubapp_notifica_output($vars) {
                 ['value' => $_POST['tpl_' . $key]]
             );
         }
-        echo '<div class="alert alert-success"><i class="fas fa-save"></i> Configurações e Templates salvos com sucesso!</div>';
+        echo '<div class="alert alert-success"><i class="fas fa-save"></i> Configurações salvas!</div>';
     }
 
-    // Lógica: Teste de Conexão com externalKey
     if (isset($_POST['test_connection'])) {
-        $result = \HubAppModule\HubAppClient::sendToAdmin("🚀 *HubApp Notifica*\nTeste de conexão unificado realizado com sucesso!", "TEST_" . time());
+        $result = \HubAppModule\HubAppClient::sendToAdmin("🚀 *HubApp Notifica*\nTeste de conexão com CloseTicket: " . ($vars['close_ticket']=='on'?'Sim':'Não'), "TEST_" . time());
         echo '<div class="alert alert-info"><strong>Resposta da API:</strong><br><pre>' . htmlspecialchars($result) . '</pre></div>';
     }
 
-    // Lógica: Envio Manual
     if (isset($_POST['send_manual_msg']) && !empty($_POST['manual_body'])) {
         \HubAppModule\HubAppClient::send($_POST['target_client'], $_POST['manual_body'], "MANUAL_" . time());
-        echo '<div class="alert alert-success"><i class="fas fa-check"></i> Mensagem personalizada enviada com sucesso!</div>';
+        echo '<div class="alert alert-success"><i class="fas fa-check"></i> Mensagem enviada!</div>';
     }
 
     echo '<h2><i class="fab fa-whatsapp" style="color:#25D366"></i> Central HubApp Notifica</h2>';
 
-    // Bloco de Teste e Envio Manual (Coluna Única para Scannability)
     echo '<div class="panel panel-default">
         <div class="panel-heading"><h3 class="panel-title"><i class="fas fa-plug"></i> Testar Conexão</h3></div>
         <div class="panel-body">
-            <form method="post">
-                <button type="submit" name="test_connection" class="btn btn-info"><i class="fas fa-paper-plane"></i> Enviar Teste para WhatsApp Admin</button>
-            </form>
+            <form method="post"><button type="submit" name="test_connection" class="btn btn-info"><i class="fas fa-paper-plane"></i> Enviar Teste (Admin)</button></form>
         </div>
     </div>';
 
     echo '<div class="panel panel-info">
-        <div class="panel-heading"><h3 class="panel-title"><i class="fas fa-user-edit"></i> Envio Avulso para Cliente</h3></div>
+        <div class="panel-heading"><h3 class="panel-title"><i class="fas fa-user-edit"></i> Envio Avulso</h3></div>
         <div class="panel-body">
             <form method="post">
-                <div class="form-group">
-                    <label>Cliente:</label>
-                    <select name="target_client" class="form-control">
-                        <option value="">-- Selecione o Cliente --</option>';
+                <div class="form-group"><label>Cliente:</label><select name="target_client" class="form-control"><option value="">-- Selecione --</option>';
                         $clients = Capsule::table('tblclients')->orderBy('firstname', 'asc')->get(['id', 'firstname', 'lastname']);
                         foreach ($clients as $c) { echo '<option value="'.$c->id.'">#'.$c->id.' - '.$c->firstname.' '.$c->lastname.'</option>'; }
-    echo '          </select>
-                </div>
-                <div class="form-group">
-                    <label>Mensagem:</label>
-                    <textarea name="manual_body" class="form-control" rows="3" placeholder="Digite sua mensagem..."></textarea>
-                </div>
-                <button type="submit" name="send_manual_msg" class="btn btn-primary btn-block">Enviar WhatsApp Agora</button>
+    echo '          </select></div>
+                <div class="form-group"><label>Mensagem:</label><textarea name="manual_body" class="form-control" rows="3"></textarea></div>
+                <button type="submit" name="send_manual_msg" class="btn btn-primary btn-block">Enviar Agora</button>
             </form>
         </div>
     </div>';
 
-    // Gerenciador de Templates
     echo '<form method="post"><div class="panel panel-default">
-        <div class="panel-heading"><h3 class="panel-title"><i class="fas fa-robot"></i> Configuração de Automações</h3></div>
-        <table class="table table-striped">
-            <thead><tr><th width="25%">Evento WHMCS</th><th>Mensagem Customizada (Texto Simples)</th></tr></thead>
-            <tbody>';
+        <div class="panel-heading"><h3 class="panel-title"><i class="fas fa-robot"></i> Automações</h3></div>
+        <table class="table table-striped"><thead><tr><th width="25%">Evento</th><th>Mensagem</th></tr></thead><tbody>';
     foreach ($templates as $key => $data) {
         $val = Capsule::table('tbladdonmodules')->where('module', 'hubapp_notifica')->where('setting', 'template_' . $key)->value('value');
         $display = (!empty($val)) ? $val : $data['default'];
         echo '<tr><td><strong>'.$data['name'].'</strong></td><td><textarea name="tpl_'.$key.'" class="form-control" rows="2">'.htmlspecialchars($display).'</textarea></td></tr>';
     }
-    echo '</tbody></table>
-        <div class="panel-footer"><button type="submit" name="save_templates" class="btn btn-success"><i class="fas fa-save"></i> Salvar Todos os Templates</button></div>
-    </div></form>';
-
-    echo '<div class="text-center" style="margin-top: 20px; color: #888;">
-        <small>HubApp Notifica v1.5.9 | Suporte: <a href="https://licencas.digital" target="_blank">licencas.digital</a></small>
-    </div>';
+    echo '</tbody></table><div class="panel-footer"><button type="submit" name="save_templates" class="btn btn-success">Salvar Templates</button></div></div></form>';
 }

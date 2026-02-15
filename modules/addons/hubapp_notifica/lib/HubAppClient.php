@@ -9,7 +9,6 @@ class HubAppClient {
     public static function getValidNumber($clientId) {
         $config = Capsule::table('tbladdonmodules')->where('module', 'hubapp_notifica')->pluck('value', 'setting');
         $fieldId = (int)$config['whatsapp_field_id'];
-        
         $num = ($fieldId > 0) ? Capsule::table('tblcustomfieldsvalues')->where('fieldid', $fieldId)->where('relid', $clientId)->value('value') : '';
         if (empty(trim($num))) $num = Capsule::table('tblclients')->where('id', $clientId)->value('phonenumber');
         
@@ -37,26 +36,37 @@ class HubAppClient {
         $gateway = $config['gateway_type'];
         $token = trim(str_replace('Bearer ', '', $config['api_token']));
         
+        // Verifica se a opção de fechar ticket está marcada ('on' no WHMCS = true)
+        $shouldCloseTicket = ($config['close_ticket'] === 'on');
+
+        // Payload Base
         $payload = ["number" => $num];
         $headers = ['Content-Type: application/json'];
 
-        // --- LÓGICA DE GATEWAY ---
-
         if ($gateway == 'zpro') {
-            // Z-Pro (Correção Final): Exige 'body' E 'externalKey'
+            // Z-Pro: Exige body, externalKey e suporta isClosed
             $payload["body"] = $msg;
             $payload["externalKey"] = (string)$key;
+            
+            // Aqui recuperamos a funcionalidade perdida:
+            if ($shouldCloseTicket) {
+                $payload["isClosed"] = true;
+            }
+
             $headers[] = 'Authorization: Bearer ' . $token;
         } 
         elseif ($gateway == 'evolution') {
-            // Evolution: Validado anteriormente
+            // Evolution
             $payload["text"] = $msg;
-            // Algumas versões da Evo aceitam externalKey, mal não faz enviar se foi validado assim
-            $payload["externalKey"] = (string)$key; 
+            $payload["externalKey"] = (string)$key;
+            // Algumas integrações de Evo também aceitam isClosed ou closeTicket nas options
+            if ($shouldCloseTicket) {
+               $payload["isClosed"] = true; 
+            }
             $headers[] = 'apikey: ' . $token;
         } 
         else {
-            // Whaticket: Validado anteriormente (apenas body)
+            // Whaticket (Padrão Minimalista)
             $payload["body"] = $msg;
             $headers[] = 'Authorization: Bearer ' . $token;
         }

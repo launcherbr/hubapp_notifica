@@ -1,6 +1,6 @@
 <?php
 /**
- * HubApp Notifica WHMCS - Hooks Unificados (v1.5.9)
+ * HubApp Notifica WHMCS (v1.6.0)
  * Suporta: Whaticket, Evolution API e Z-Pro
  */
 
